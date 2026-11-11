@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digits · كيف يرى النموذج</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="nav"></header>
+<main class="wrap">
+  <div class="hero">
+    <h1>كيف يرى النموذج <em>See what the model sees</em></h1>
+    <p>ارسم وتابع الرقم مرحلة بعد مرحلة · draw and follow it stage by stage</p>
+  </div>
+
+  <div class="stack">
+    <div class="grid">
+      <section class="card center">
+        <canvas id="pad" class="pad" width="280" height="280"></canvas>
+        <div class="row"><button id="clear" class="btn ghost">مسح · Clear</button></div>
+      </section>
+      <section class="card center">
+        <div id="digit" class="digit none">?</div>
+        <div id="conf" class="conf">—</div>
+        <div id="bars" class="bars"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h3>مراحل المعالجة <small>Preprocessing stages</small></h3>
+      <div class="stages">
+        <div class="stage"><div class="frame"><canvas id="s1"></canvas></div><b>1 · الرسمة</b>Drawing + box</div>
+        <div class="stage"><div class="frame"><canvas id="s2"></canvas></div><b>2 · القص</b>Crop</div>
+        <div class="stage"><div class="frame"><canvas id="s3"></canvas></div><b>3 · التصغير</b>Longest side 20 px</div>
+        <div class="stage"><div class="frame"><canvas id="s4"></canvas></div><b>4 · الإطار</b>28×28 centred</div>
+      </div>
+    </section>
+
+    <section class="card center">
+      <h3 style="align-self:flex-start">الطبقة المخفية <small>Hidden layer · 64 neurons (ReLU)</small></h3>
+      <div class="neurons" id="neurons"></div>
+    </section>
+  </div>
+  <div id="status" class="status"></div>
+</main>
+
+<script src="model.js"></script>
+<script src="ui.js"></script>
+<script>
+UI.nav('inspect.html');
+var W = null;
+var padCanvas = document.getElementById('pad');
+var s1 = document.getElementById('s1'), s2 = document.getElementById('s2'), s3 = document.getElementById('s3'), s4 = document.getElementById('s4');
+var res = UI.result(document.getElementById('digit'), document.getElementById('conf'), UI.buildBars(document.getElementById('bars')));
+
+var neuronsEl = document.getElementById('neurons'), cells = [];
+for (var n = 0; n < 64; n++) { var c = document.createElement('i'); neuronsEl.appendChild(c); cells.push(c); }
+
+function sizeTo(canvas, w, h, maxPx) {
+  var s = maxPx / Math.max(w, h);
+  canvas.style.width = Math.round(w * s) + 'px';
+  canvas.style.height = Math.round(h * s) + 'px';
+}
+
+function clearStages() {
+  [s2, s3, s4].forEach(function (cv) { UI.drawGray(cv, new Float32Array(1), 1, 1, 8); });
+  s1.width = 280; s1.height = 280; sizeTo(s1, 280, 280, 120);
+  s1.getContext('2d').clearRect(0, 0, 280, 280);
+  cells.forEach(function (c) { c.style.background = ''; c.title = ''; });
+}
+
+function update() {
+  if (!W) return;
+  var g = padCtl.gray(), dbg = {};
+  var img = MODEL.preprocess(g.gray, g.w, g.h, dbg);
+  if (!img) { res.empty(); clearStages(); return; }
+
+  // 1: the drawing with the digit's bounding box
+  s1.width = 280; s1.height = 280; sizeTo(s1, 280, 280, 120);
+  var c1 = s1.getContext('2d');
+  c1.drawImage(padCanvas, 0, 0);
+  c1.strokeStyle = '#ff8a1f'; c1.lineWidth = 4;
+  c1.strokeRect(dbg.box.x0, dbg.box.y0, dbg.box.x1 - dbg.box.x0 + 1, dbg.box.y1 - dbg.box.y0 + 1);
+
+  UI.drawGray(s2, dbg.crop.data, dbg.crop.w, dbg.crop.h, 120);
+  UI.drawGray(s3, dbg.small.data, dbg.small.w, dbg.small.h, 120);
+  UI.drawGray(s4, img, 28, 28, 120);
+
+  var f = MODEL.forward(img, W);
+  res.show(f.p);
+  var mx = 0; for (var i = 0; i < 64; i++) if (f.hidden[i] > mx) mx = f.hidden[i];
+  for (var j = 0; j < 64; j++) {
+    var a = mx > 0 ? f.hidden[j] / mx : 0;
+    cells[j].style.background = a > 0 ? 'rgba(255,106,26,' + (0.12 + 0.88 * a).toFixed(2) + ')' : '';
+    cells[j].title = 'neuron ' + j + ': ' + f.hidden[j].toFixed(2);
+  }
+}
+
+var padCtl = UI.createPad(padCanvas, update);
+document.getElementById('clear').addEventListener('click', function () { padCtl.clear(); });
+res.empty(); clearStages();
+UI.loadModel(document.getElementById('status')).then(function (w) { W = w; update(); });
+</script>
+</body>
+</html>

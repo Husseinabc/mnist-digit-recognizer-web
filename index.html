@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digits · ارسم</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="nav"></header>
+<main class="wrap">
+  <div class="hero">
+    <h1>ارسم رقماً <em>Draw a digit</em></h1>
+    <p>من 0 إلى 9 · from 0 to 9</p>
+  </div>
+
+  <div class="grid">
+    <section class="card center">
+      <canvas id="pad" class="pad" width="280" height="280"></canvas>
+      <div class="row"><button id="clear" class="btn ghost">مسح · Clear</button></div>
+    </section>
+
+    <section class="card center">
+      <div id="digit" class="digit none">?</div>
+      <div id="conf" class="conf">—</div>
+      <div id="bars" class="bars"></div>
+      <div class="seen">
+        <canvas id="view" class="px"></canvas>
+        <span>ما يراه النموذج<br>The model's view · 28×28</span>
+      </div>
+    </section>
+  </div>
+  <div id="status" class="status"></div>
+</main>
+
+<script src="model.js"></script>
+<script src="ui.js"></script>
+<script>
+UI.nav('index.html');
+var W = null;
+var view = document.getElementById('view');
+var res = UI.result(document.getElementById('digit'), document.getElementById('conf'), UI.buildBars(document.getElementById('bars')));
+
+function blank() { UI.drawGray(view, new Float32Array(784), 28, 28, 112); }
+
+function update() {
+  if (!W) return;
+  var g = padCtl.gray();
+  var img = MODEL.preprocess(g.gray, g.w, g.h);
+  if (!img) { res.empty(); blank(); return; }
+  UI.drawGray(view, img, 28, 28, 112);
+  res.show(MODEL.predict(img, W));
+}
+
+var padCtl = UI.createPad(document.getElementById('pad'), update);
+document.getElementById('clear').addEventListener('click', function () { padCtl.clear(); });
+res.empty(); blank();
+UI.loadModel(document.getElementById('status')).then(function (w) { W = w; update(); });
+</script>
+</body>
+</html>

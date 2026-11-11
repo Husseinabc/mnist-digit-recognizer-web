@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digits · تحدي</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="nav"></header>
+<main class="wrap">
+  <div class="hero">
+    <h1>تحدي <em>Challenge</em></h1>
+    <p>ارسم الرقم المطلوب وشوف هل النموذج يعرفه · draw the requested digit and see if the model gets it</p>
+  </div>
+
+  <div class="scorebar">
+    <div class="chip">الصحيح · Correct <b id="ok">0</b> / <b id="total">0</b></div>
+    <div class="chip">السلسلة · Streak <b id="streak">0</b></div>
+    <div class="chip">الأفضل · Best <b id="best">0</b></div>
+  </div>
+
+  <div class="grid">
+    <section class="card center">
+      <div class="target"><span>ارسم الرقم · Draw</span><span class="n" id="target">?</span></div>
+      <canvas id="pad" class="pad" width="280" height="280"></canvas>
+      <div class="hint" id="hint"></div>
+      <div class="row">
+        <button id="clear" class="btn ghost">مسح · Clear</button>
+        <button id="check" class="btn">تحقق · Check</button>
+        <button id="next" class="btn" hidden>التالي · Next</button>
+        <button id="skip" class="btn ghost">تخطي · Skip</button>
+      </div>
+    </section>
+
+    <section class="card center" id="resultCard" hidden>
+      <div class="banner" id="banner"></div>
+      <div id="digit" class="digit none">?</div>
+      <div id="conf" class="conf">—</div>
+      <div id="bars" class="bars"></div>
+      <div class="seen">
+        <canvas id="view" class="px"></canvas>
+        <span>ما يراه النموذج<br>The model's view · 28×28</span>
+      </div>
+    </section>
+  </div>
+  <div id="status" class="status"></div>
+</main>
+
+<script src="model.js"></script>
+<script src="ui.js"></script>
+<script>
+UI.nav('challenge.html');
+var W = null, target = -1, checked = false;
+var score = { ok: 0, total: 0, streak: 0, best: 0 };
+var $ = function (id) { return document.getElementById(id); };
+var res = UI.result($('digit'), $('conf'), UI.buildBars($('bars')));
+
+function showScore() {
+  $('ok').textContent = score.ok; $('total').textContent = score.total;
+  $('streak').textContent = score.streak; $('best').textContent = score.best;
+}
+
+function nextRound() {
+  var t;
+  do { t = Math.floor(Math.random() * 10); } while (t === target);
+  target = t; checked = false;
+  $('target').textContent = t;
+  $('resultCard').hidden = true;
+  $('hint').textContent = '';
+  $('check').hidden = false; $('next').hidden = true; $('skip').hidden = false;
+  padCtl.clear();
+}
+
+function check() {
+  if (checked || !W) return;
+  var g = padCtl.gray();
+  var img = MODEL.preprocess(g.gray, g.w, g.h);
+  if (!img) { $('hint').textContent = 'ارسم الرقم أولاً · Draw the digit first'; return; }
+  checked = true;
+  var p = MODEL.predict(img, W);
+  var guess = res.show(p);
+  UI.drawGray($('view'), img, 28, 28, 112);
+  var conf = (p[guess] * 100).toFixed(1) + '%';
+
+  score.total++;
+  var banner = $('banner');
+  if (guess === target) {
+    score.ok++; score.streak++; if (score.streak > score.best) score.best = score.streak;
+    banner.className = 'banner ok';
+    banner.textContent = 'أحسنت! النموذج عرف رقمك · The model got it (' + conf + ')';
+  } else {
+    score.streak = 0;
+    banner.className = 'banner bad';
+    banner.textContent = 'النموذج شافه ' + guess + ' بدل ' + target + ' · It saw ' + guess + ' instead of ' + target + ' (' + conf + ')';
+  }
+  showScore();
+  $('resultCard').hidden = false;
+  $('check').hidden = true; $('next').hidden = false; $('skip').hidden = true;
+}
+
+var padCtl = UI.createPad($('pad'), null);
+$('clear').addEventListener('click', function () { if (!checked) padCtl.clear(); else nextRound(); });
+$('check').addEventListener('click', check);
+$('next').addEventListener('click', nextRound);
+$('skip').addEventListener('click', nextRound);
+
+showScore(); res.empty(); nextRound();
+UI.loadModel($('status')).then(function (w) { W = w; });
+</script>
+</body>
+</html>
